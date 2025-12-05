@@ -42,7 +42,9 @@ public class Passageiro extends Entidade {
     // REESCRITA - @OVERRIDE
     @Override
     public String toString() {
-        return "Passageiro{id=" + this.id + ", nome='" + this.nome + "', documento='" + this.documento + "'}";
+        return String.format("Passageiro{id=%d, nome='%s', documento='%s', nascimento=%02d/%02d/%04d}",
+                this.id, this.nome, this.documento,
+                this.nascimento.getDayOfMonth(), this.nascimento.getMonthValue(), this.nascimento.getYear());
     }
 
     // POLIMORFISMO - implementação do método abstrato

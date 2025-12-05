@@ -1,75 +1,109 @@
 package service;
 
-import dao.CheckInDAO;
-import model.CheckIn;
-import model.Ticket;
-import model.Voo;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import dao.*;
+import model.*;
+import util.DateUtil;
 
-// CRUD COM DAO
+import java.sql.SQLException;
+import java.time.LocalDateTime;
+
+/*
+ REGRA DE NEGÓCIO PRINCIPAL: check-in só pode ser feito até 24h antes do voo.
+ */
 public class CheckInService {
-    private CheckInDAO checkInDAO;
-    private TicketService ticketService;
-    private VooService vooService;
+    
+    private final CheckInDAO checkInDAO;
+    private final TicketDAO ticketDAO;
+    private final VooDAO vooDAO;
+    private final BoardingPassDAO boardingPassDAO;
+    private final PassageiroDAO passageiroDAO;
+    private final AeroportoDAO aeroportoDAO;
+    private final AssentoDAO assentoDAO;
 
     public CheckInService() {
         this.checkInDAO = new CheckInDAO();
-        this.ticketService = new TicketService();
-        this.vooService = new VooService();
+        this.ticketDAO = new TicketDAO();
+        this.vooDAO = new VooDAO();
+        this.boardingPassDAO = new BoardingPassDAO();
+        this.passageiroDAO = new PassageiroDAO();
+        this.aeroportoDAO = new AeroportoDAO();
+        this.assentoDAO = new AssentoDAO();
     }
 
-    public boolean realizarCheckin(int ticketId, String documento, String codigoBoardingPass) {
-        Ticket ticket = ticketService.buscarTicketPorId(ticketId);
+
+    public BoardingPass realizarCheckIn(int ticketId, String documento) throws SQLException {
+        // Verifica se ticket existe
+        Ticket ticket = ticketDAO.readById(ticketId);
         if (ticket == null) {
-            return false;
+            throw new IllegalArgumentException("Ticket não encontrado.");
         }
 
-        // Verificar se o check-in está sendo feito até 24 horas antes do voo
-        Voo voo = vooService.buscarVooPorId(ticket.getVooId());
+        // Verifica se já existe check-in
+        if (checkInDAO.existeCheckIn(ticketId)) {
+            throw new IllegalStateException("Check-in já foi realizado para este ticket.");
+        }
+
+        // Busca o voo
+        Voo voo = vooDAO.readById(ticket.getVooId());
         if (voo == null) {
-            return false;
+            throw new IllegalArgumentException("Voo não encontrado.");
         }
 
+        // REGRA DE NEGÓCIO: verifica se está dentro de 24 horas antes do voo
         LocalDateTime agora = LocalDateTime.now();
-        LocalDateTime dataVoo = voo.getData().atStartOfDay();
-        long horasAteVoo = ChronoUnit.HOURS.between(agora, dataVoo);
-
-        if (horasAteVoo < 24) {
-            return false; // Check-in só pode ser feito até 24h antes
+        long horasAteVoo = DateUtil.hoursBetween(agora, voo.getDataHora());
+        
+        if (horasAteVoo > 24) {
+            throw new IllegalStateException(
+                String.format("Check-in só pode ser feito até 24 horas antes do voo. Faltam %d horas.", horasAteVoo)
+            );
         }
 
-        // Criar check-in
-        int novoId = this.gerarNovoId();
-        CheckIn checkin = new CheckIn(novoId, ticketId, documento, codigoBoardingPass);
-        this.checkInDAO.criar(checkin);
+        if (horasAteVoo < 0) {
+            throw new IllegalStateException("O voo já partiu. Check-in não é mais possível.");
+        }
 
-        // Marcar ticket como com check-in realizado
-        ticketService.realizarCheckin(ticketId);
+        // Cria o check-in
+        CheckIn checkIn = new CheckIn(0, ticketId, documento, "");
+        checkInDAO.create(checkIn);
 
-        return true;
-    }
+        // Gera boarding pass
+        Passageiro passageiro = passageiroDAO.readById(ticket.getPassageiroId());
+        Aeroporto origem = aeroportoDAO.readById(voo.getOrigemId());
+        Aeroporto destino = aeroportoDAO.readById(voo.getDestinoId());
 
-    public CheckIn buscarCheckinPorTicketId(int ticketId) {
-        return this.checkInDAO.buscarPorTicketId(ticketId);
-    }
-
-    public CheckIn buscarCheckinPorId(int id) {
-        return this.checkInDAO.buscarPorId(id);
-    }
-
-    public CheckIn[] listarCheckins() {
-        return this.checkInDAO.listarTodos();
-    }
-
-    private int gerarNovoId() {
-        CheckIn[] todos = this.listarCheckins();
-        int maiorId = 0;
-        for (CheckIn c : todos) {
-            if (c.getId() > maiorId) {
-                maiorId = c.getId();
+        // Busca assento do passageiro
+        String codigoAssento = "N/A";
+        for (Assento assento : assentoDAO.findByVoo(voo.getId())) {
+            if (assento.getPassageiroId() != null && assento.getPassageiroId() == passageiro.getId()) {
+                codigoAssento = assento.getCodigoAssento();
+                break;
             }
         }
-        return maiorId + 1;
+
+        String vooInfo = String.format("%s → %s (%s)", 
+            origem.getAbreviacao(), destino.getAbreviacao(), voo.getDataHora());
+
+        BoardingPass boardingPass = new BoardingPass(
+            0, ticketId, passageiro.getNome(), vooInfo, codigoAssento
+        );
+        
+        int bpId = boardingPassDAO.create(boardingPass);
+        return boardingPassDAO.readById(bpId);
+    }
+
+    /*
+     Verifica se check-in pode ser realizado para um ticket.
+     */
+    public boolean podeRealizarCheckIn(int ticketId) throws SQLException {
+        Ticket ticket = ticketDAO.readById(ticketId);
+        if (ticket == null) return false;
+
+        if (checkInDAO.existeCheckIn(ticketId)) return false;
+
+        Voo voo = vooDAO.readById(ticket.getVooId());
+        if (voo == null) return false;
+
+        return DateUtil.isDentro24Horas(LocalDateTime.now(), voo.getDataHora());
     }
 }

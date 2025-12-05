@@ -31,13 +31,16 @@ public class Ticket extends Entidade {
 
     @Override
     public String toString() {
-        return String.format("Ticket %s: Voo %d - Passageiro %d - R$ %.2f - Check-in: %s",
+        return String.format("Ticket %s: Voo %d - Passageiro %d - R$ %.2f - Check-in: %s - Data: %02d/%02d/%04d",
                 this.codigo, this.vooId, this.passageiroId, this.valor,
-                this.checkinRealizado ? "Sim" : "Não");
+                this.checkinRealizado ? "Sim" : "Não",
+                this.dataCriacao.getDayOfMonth(), this.dataCriacao.getMonthValue(), this.dataCriacao.getYear());
     }
 
     @Override
     public String getDetalhes() {
-        return "Ticket: " + this.codigo + " - Voo " + this.vooId + " - R$ " + this.valor;
+        return String.format("Ticket: %s - Voo %d - R$ %.2f - %02d/%02d/%04d",
+                this.codigo, this.vooId, this.valor,
+                this.dataCriacao.getDayOfMonth(), this.dataCriacao.getMonthValue(), this.dataCriacao.getYear());
     }
 }

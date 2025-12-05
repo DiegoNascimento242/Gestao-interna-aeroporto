@@ -34,7 +34,9 @@ public class Aeroporto extends Entidade {
 
     @Override
     public String toString() {
-        return "Aeroporto{id=" + this.id + ", nome='" + this.nome + "', cidade='" + this.cidade + "'}";
+        return String.format("Aeroporto{id=%d, nome='%s', cidade='%s', criacao=%02d/%02d/%04d}",
+                this.id, this.nome, this.cidade,
+                this.dataCriacao.getDayOfMonth(), this.dataCriacao.getMonthValue(), this.dataCriacao.getYear());
     }
 
     @Override

@@ -2,39 +2,41 @@ package model;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 
 // HERANÇA - Voo herda de Entidade
 public class Voo extends Entidade {
-    private String origem;
-    private String destino;
-    private LocalDate data;
-    private LocalTime duracao;
-    private String companhia;
+    private int origemId; // ID do aeroporto de origem
+    private int destinoId; // ID do aeroporto de destino
+    private LocalDateTime dataHora; // Data e hora do voo
+    private int duracaoMinutos; // Duração em minutos
+    private int companhiaAereaId; // ID da companhia aérea
     private int capacidade;
     private String estado;
     private int assentosOcupados;
     private double preco; // DOUBLE para dinheiro
 
-    public Voo(int id, String origem, String destino, LocalDate data, LocalTime duracao,
-               String companhia, int capacidade, double preco) {
+
+    public Voo(int id, int origemId, int destinoId, LocalDateTime dataHora, int duracaoMinutos,
+               int companhiaAereaId, int capacidade, String estado) {
         super(id); // HERANÇA
-        this.origem = origem;
-        this.destino = destino;
-        this.data = data;
-        this.duracao = duracao;
-        this.companhia = companhia;
+        this.origemId = origemId;
+        this.destinoId = destinoId;
+        this.dataHora = dataHora;
+        this.duracaoMinutos = duracaoMinutos;
+        this.companhiaAereaId = companhiaAereaId;
         this.capacidade = capacidade;
-        this.preco = preco;
-        this.estado = "Programado";
+        this.estado = estado;
         this.assentosOcupados = 0;
+        this.preco = 0.0; // Será definido pelo ticket
     }
 
     // GETTERS E SETTERS - ENCAPSULAMENTO
-    public String getOrigem() { return this.origem; }
-    public String getDestino() { return this.destino; }
-    public LocalDate getData() { return this.data; }
-    public LocalTime getDuracao() { return this.duracao; }
-    public String getCompanhia() { return this.companhia; }
+    public int getOrigemId() { return this.origemId; }
+    public int getDestinoId() { return this.destinoId; }
+    public LocalDateTime getDataHora() { return this.dataHora; }
+    public int getDuracaoMinutos() { return this.duracaoMinutos; }
+    public int getCompanhiaAereaId() { return this.companhiaAereaId; }
     public int getCapacidade() { return this.capacidade; }
     public String getEstado() { return this.estado; }
     public void setEstado(String estado) {
@@ -68,14 +70,22 @@ public class Voo extends Entidade {
     // REESCRITA - @OVERRIDE
     @Override
     public String toString() {
-        return String.format("Voo %d: %s -> %s (%s) - %s - R$ %.2f - %d/%d assentos",
-                this.id, this.origem, this.destino, this.data, this.companhia, this.preco,
-                this.assentosOcupados, this.capacidade);
+        return String.format("Voo %d: Origem=%d Destino=%d Data=%s Estado=%s Assentos=%d/%d",
+                this.id, this.origemId, this.destinoId, this.dataHora,
+                this.estado, this.assentosOcupados, this.capacidade);
     }
 
     // POLIMORFISMO - implementação do método abstrato
     @Override
     public String getDetalhes() {
-        return "Voo: " + this.origem + " para " + this.destino + " - " + this.companhia + " - " + this.estado;
+        return String.format("Voo ID=%d: Origem=%d Destino=%d Data=%s Estado=%s",
+                this.id, this.origemId, this.destinoId, this.dataHora, this.estado);
+    }
+
+    // Método para obter horas até o voo
+    public long getHorasAteVoo() {
+        return java.time.temporal.ChronoUnit.HOURS.between(
+                LocalDateTime.now(), this.dataHora
+        );
     }
 }

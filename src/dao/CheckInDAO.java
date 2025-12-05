@@ -1,79 +1,118 @@
 package dao;
 
 import model.CheckIn;
+import util.DatabaseConnection;
 
-// CRUD COM DAO implementando INTERFACE
+import java.sql.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
 public class CheckInDAO implements IDAO<CheckIn> {
-    private CheckIn[] checkins; // VETOR
-    private int tamanho;
-    private static final int CAPACIDADE_MAXIMA = 200;
 
-    public CheckInDAO() {
-        this.checkins = new CheckIn[CAPACIDADE_MAXIMA];
-        this.tamanho = 0;
-    }
-
-    public void criar(CheckIn checkin) {
-        if (this.tamanho < this.checkins.length) {
-            this.checkins[this.tamanho] = checkin;
-            this.tamanho++;
+    @Override
+    public int create(CheckIn checkIn) throws SQLException {
+        String sql = "INSERT INTO checkin (ticket_id, documento, data_criacao, data_modificacao) VALUES (?, ?, ?, ?)";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            
+            stmt.setInt(1, checkIn.getTicketId());
+            stmt.setString(2, checkIn.getDocumento());
+            stmt.setTimestamp(3, Timestamp.valueOf(checkIn.getDataCriacao()));
+            stmt.setTimestamp(4, Timestamp.valueOf(checkIn.getDataModificacao()));
+            
+            stmt.executeUpdate();
+            
+            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                if (generatedKeys.next()) return generatedKeys.getInt(1);
+                throw new SQLException("Falha ao criar check-in.");
+            }
         }
     }
 
-    public CheckIn[] listarTodos() {
-        CheckIn[] resultado = new CheckIn[this.tamanho];
-        for (int i = 0; i < this.tamanho; i++) {
-            resultado[i] = this.checkins[i];
-        }
-        return resultado;
-    }
-
-    public CheckIn buscarPorId(int id) {
-        for (int i = 0; i < this.tamanho; i++) {
-            if (this.checkins[i].getId() == id) {
-                return this.checkins[i];
+    @Override
+    public CheckIn readById(int id) throws SQLException {
+        String sql = "SELECT * FROM checkin WHERE id = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return mapResultSet(rs);
             }
         }
         return null;
     }
 
-    public CheckIn buscarPorTicketId(int ticketId) {
-        for (int i = 0; i < this.tamanho; i++) {
-            if (this.checkins[i].getTicketId() == ticketId) {
-                return this.checkins[i];
+    @Override
+    public List<CheckIn> readAll() throws SQLException {
+        List<CheckIn> list = new ArrayList<>();
+        String sql = "SELECT * FROM checkin ORDER BY data_criacao DESC";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            
+            while (rs.next()) list.add(mapResultSet(rs));
+        }
+        return list;
+    }
+
+    @Override
+    public boolean update(CheckIn checkIn) throws SQLException {
+        String sql = "UPDATE checkin SET documento = ?, data_modificacao = ? WHERE id = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, checkIn.getDocumento());
+            stmt.setTimestamp(2, Timestamp.valueOf(LocalDateTime.now()));
+            stmt.setInt(3, checkIn.getId());
+            
+            return stmt.executeUpdate() > 0;
+        }
+    }
+
+    @Override
+    public boolean delete(int id) throws SQLException {
+        String sql = "DELETE FROM checkin WHERE id = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, id);
+            return stmt.executeUpdate() > 0;
+        }
+    }
+
+
+    public CheckIn findByTicket(int ticketId) throws SQLException {
+        String sql = "SELECT * FROM checkin WHERE ticket_id = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, ticketId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) return mapResultSet(rs);
             }
         }
         return null;
     }
 
-    public CheckIn buscarPorCodigoBoardingPass(String codigoBoardingPass) {
-        for (int i = 0; i < this.tamanho; i++) {
-            if (this.checkins[i].getCodigoBoardingPass().equals(codigoBoardingPass)) {
-                return this.checkins[i];
-            }
-        }
-        return null;
+
+    public boolean existeCheckIn(int ticketId) throws SQLException {
+        return findByTicket(ticketId) != null;
     }
 
-    public void atualizar(int id, CheckIn checkinAtualizado) {
-        for (int i = 0; i < this.tamanho; i++) {
-            if (this.checkins[i].getId() == id) {
-                this.checkins[i] = checkinAtualizado;
-                break;
-            }
-        }
-    }
-
-    public void deletar(int id) {
-        for (int i = 0; i < this.tamanho; i++) {
-            if (this.checkins[i].getId() == id) {
-                for (int j = i; j < this.tamanho - 1; j++) {
-                    this.checkins[j] = this.checkins[j + 1];
-                }
-                this.checkins[this.tamanho - 1] = null;
-                this.tamanho--;
-                break;
-            }
-        }
+    private CheckIn mapResultSet(ResultSet rs) throws SQLException {
+        return new CheckIn(
+            rs.getInt("id"),
+            rs.getInt("ticket_id"),
+            rs.getString("documento"),
+            "" // codigoBoardingPass será gerado depois
+        );
     }
 }

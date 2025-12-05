@@ -1,77 +1,89 @@
 package service;
 
-import dao.VooDAO;
-import model.Voo;
-import java.time.LocalDate;
-import java.time.LocalTime;
+import dao.*;
+import model.*;
 
-// CRUD COM DAO
+import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Random;
+
 public class VooService {
-    private VooDAO vooDAO;
+    
+    private final VooDAO vooDAO;
+    private final AssentoDAO assentoDAO;
+    private final TicketDAO ticketDAO;
+    private final AeroportoDAO aeroportoDAO;
+    private final CompanhiaAereaDAO companhiaDAO;
 
     public VooService() {
         this.vooDAO = new VooDAO();
+        this.assentoDAO = new AssentoDAO();
+        this.ticketDAO = new TicketDAO();
+        this.aeroportoDAO = new AeroportoDAO();
+        this.companhiaDAO = new CompanhiaAereaDAO();
     }
 
-    public void criarVoo(String origem, String destino, LocalDate data, LocalTime duracao,
-                         String companhia, int capacidade, double preco) {
-        int novoId = this.gerarNovoId();
-        Voo voo = new Voo(novoId, origem, destino, data, duracao, companhia, capacidade, preco);
-        this.vooDAO.criar(voo);
+    public List<Voo> buscarVoosDisponiveis(int origemId, int destinoId, 
+                                           LocalDateTime dataInicio, LocalDateTime dataFim) throws SQLException {
+        return vooDAO.buscarVoos(origemId, destinoId, dataInicio, dataFim);
     }
 
-    public Voo[] listarVoos() {
-        return this.vooDAO.listarTodos();
-    }
+    public Ticket comprarTicket(int vooId, int passageiroId, double valor, Integer assentoId) throws SQLException {
+        Voo voo = vooDAO.readById(vooId);
+        if (voo == null) throw new IllegalArgumentException("Voo não encontrado.");
 
-    public Voo buscarVooPorId(int id) {
-        return this.vooDAO.buscarPorId(id);
-    }
+        List<Assento> assentosLivres = assentoDAO.findAssentosLivres(vooId);
+        if (assentosLivres.isEmpty()) throw new IllegalStateException("Voo lotado!");
 
-    public Voo[] buscarVoosPorRotaEData(String origem, String destino, LocalDate data) {
-        return this.vooDAO.buscarPorRotaEData(origem, destino, data);
-    }
+        String codigo = gerarCodigoTicket();
+        Ticket ticket = new Ticket(0, valor, vooId, passageiroId, codigo);
+        int ticketId = ticketDAO.create(ticket);
+        ticket = ticketDAO.readById(ticketId);
 
-    public Voo[] buscarVoosPorOrigem(String origem) {
-        return this.vooDAO.buscarPorOrigem(origem);
-    }
-
-    public Voo[] buscarVoosPorDestino(String destino) {
-        return this.vooDAO.buscarPorDestino(destino);
-    }
-
-    public void atualizarEstadoVoo(int id, String estado) {
-        Voo voo = this.vooDAO.buscarPorId(id);
-        if (voo != null) {
-            voo.setEstado(estado);
-            this.vooDAO.atualizar(id, voo);
+        if (assentoId != null) {
+            assentoDAO.atribuirPassageiro(assentoId, passageiroId);
         }
+
+        return ticket;
     }
 
-    public boolean reservarAssento(int vooId) {
-        Voo voo = this.vooDAO.buscarPorId(vooId);
-        if (voo != null && voo.temAssentosDisponiveis()) {
-            boolean sucesso = voo.reservarAssento();
-            if (sucesso) {
-                this.vooDAO.atualizar(vooId, voo);
-            }
-            return sucesso;
+    public boolean vooEstaLotado(int vooId) throws SQLException {
+        return assentoDAO.findAssentosLivres(vooId).isEmpty();
+    }
+
+    public String obterDetalhesVoo(int vooId) throws SQLException {
+        Voo voo = vooDAO.readById(vooId);
+        if (voo == null) return "Voo não encontrado.";
+
+        Aeroporto origem = aeroportoDAO.readById(voo.getOrigemId());
+        Aeroporto destino = aeroportoDAO.readById(voo.getDestinoId());
+        CompanhiaAerea companhia = companhiaDAO.readById(voo.getCompanhiaAereaId());
+        List<Assento> assentosLivres = assentoDAO.findAssentosLivres(vooId);
+
+        return String.format(
+            "Voo #%d | %s (%s) → %s (%s) | %s | %s | Assentos: %d/%d",
+            voo.getId(), origem.getAbreviacao(), origem.getCidade(),
+            destino.getAbreviacao(), destino.getCidade(), companhia.getNome(),
+            voo.getDataHora(), assentosLivres.size(), voo.getCapacidade()
+        );
+    }
+
+    private String gerarCodigoTicket() {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        Random random = new Random();
+        StringBuilder codigo = new StringBuilder();
+        for (int i = 0; i < 5; i++) {
+            codigo.append(chars.charAt(random.nextInt(chars.length())));
         }
-        return false;
+        return codigo.toString();
     }
 
-    public void deletarVoo(int id) {
-        this.vooDAO.deletar(id);
+    public List<Voo> buscarVoosPorOrigem(int origemId, LocalDateTime dataInicio, LocalDateTime dataFim) throws SQLException {
+        return vooDAO.buscarPorOrigem(origemId, dataInicio, dataFim);
     }
 
-    private int gerarNovoId() {
-        Voo[] todos = this.listarVoos();
-        int maiorId = 0;
-        for (Voo v : todos) {
-            if (v.getId() > maiorId) {
-                maiorId = v.getId();
-            }
-        }
-        return maiorId + 1;
+    public List<Voo> buscarVoosPorDestino(int destinoId, LocalDateTime dataInicio, LocalDateTime dataFim) throws SQLException {
+        return vooDAO.buscarPorDestino(destinoId, dataInicio, dataFim);
     }
 }
